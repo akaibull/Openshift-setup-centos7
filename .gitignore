@@ -3,4 +3,3 @@ validate/env.sh
 validate/.terraform
 validate/terraform.*
 validate/ip.tmp
-openshift-ansible
