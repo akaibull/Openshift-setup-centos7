@@ -85,19 +85,19 @@ echo "******"
 yum update -y
 
 # install the following base packages
-#yum install -y  wget git zile nano net-tools \
-#				bind-utils iptables-services \
-#				bridge-utils bash-completion \
-#				kexec-tools sos psacct openssl-devel \
-#				httpd-tools NetworkManager \
-#				python-cryptography python2-pip python-devel  python-passlib \
-#				java-1.8.0-openjdk-headless "@Development Tools"
+yum install -y  wget git zile nano net-tools docker-1.13.1\
+				bind-utils iptables-services \
+				bridge-utils bash-completion \
+				kexec-tools sos psacct openssl-devel \
+				httpd-tools NetworkManager \
+				python-cryptography python2-pip python-devel  python-passlib \
+				java-1.8.0-openjdk-headless "@Development Tools"
 
 #install epel
-#yum -y install epel-release
+yum -y install epel-release
 
 # Disable the EPEL repository globally so that is not accidentally used during later steps of the installation
-#sed -i -e "s/^enabled=1/enabled=0/" /etc/yum.repos.d/epel.repo
+sed -i -e "s/^enabled=1/enabled=0/" /etc/yum.repos.d/epel.repo
 
 systemctl | grep "NetworkManager.*running" 
 if [ $? -eq 1 ]; then
@@ -108,10 +108,10 @@ fi
 # install the packages for Ansible
 yum -y --enablerepo=epel install pyOpenSSL
 
-#curl -o ansible.rpm https://releases.ansible.com/ansible/rpm/release/epel-7-x86_64/ansible-2.6.5-1.el7.ans.noarch.rpm
-#yum -y --enablerepo=epel install ansible.rpm
+curl -o ansible.rpm https://releases.ansible.com/ansible/rpm/release/epel-7-x86_64/ansible-2.6.5-1.el7.ans.noarch.rpm
+yum -y --enablerepo=epel install ansible.rpm
 
-#[ ! -d openshift-ansible ] && git clone https://github.com/openshift/openshift-ansible.git -b release-${VERSION} --depth=1
+[ ! -d openshift-ansible ] && git clone https://github.com/openshift/openshift-ansible.git -b release-${VERSION} --depth=1
 
 cat <<EOD > /etc/hosts
 127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4 
@@ -145,8 +145,8 @@ if [ ! -f ~/.ssh/id_rsa ]; then
 	ssh -o StrictHostKeyChecking=no root@$IP "pwd" < /dev/null
 fi
 
-export METRICS="True"
-export LOGGING="True"
+export METRICS="False"
+export LOGGING="False"
 
 memory=$(cat /proc/meminfo | grep MemTotal | sed "s/MemTotal:[ ]*\([0-9]*\) kB/\1/")
 
@@ -158,6 +158,8 @@ if [ "$memory" -lt "16777216" ]; then
 	export LOGGING="False"
 fi
 
+curl -o inventory.download $SCRIPT_REPO/inventory.ini
+envsubst < inventory.download > inventory.ini
 
 # add proxy in inventory.ini if proxy variables are set
 if [ ! -z "${HTTPS_PROXY:-${https_proxy:-${HTTP_PROXY:-${http_proxy}}}}" ]; then
@@ -219,28 +221,30 @@ fi
 mkdir -p /etc/origin/master/
 touch /etc/origin/master/htpasswd
 
-ansible-playbook -i inventory.ini openshift-ansible/playbooks/prerequisites.yml
-ansible-playbook -i inventory.ini openshift-ansible/playbooks/deploy_cluster.yml
+ansible-playbook -i /etc/ansible/hosts openshift-ansible/playbooks/prerequisites.yml
+ansible-playbook -i /etc/ansible/hosts openshift-ansible/playbooks/deploy_cluster.yml
 
 htpasswd -b /etc/origin/master/htpasswd ${USERNAME} ${PASSWORD}
 oc adm policy add-cluster-role-to-user cluster-admin ${USERNAME}
 
-if [ "$PVS" = "true" ]; then
+#if [ "$PVS" = "true" ]; then
 
-	for i in `seq 1 200`;
-	do
-		DIRNAME="vol$i"
-		mkdir -p /mnt/data/$DIRNAME 
-		chcon -Rt svirt_sandbox_file_t /mnt/data/$DIRNAME
-		chmod 777 /mnt/data/$DIRNAME
+#	curl -o vol.yaml $SCRIPT_REPO/vol.yaml
+
+#	for i in `seq 1 200`;
+#	do
+#		DIRNAME="vol$i"
+#		mkdir -p /mnt/data/$DIRNAME 
+#		chcon -Rt svirt_sandbox_file_t /mnt/data/$DIRNAME
+#		chmod 777 /mnt/data/$DIRNAME
 		
-		sed "s/name: vol/name: vol$i/g" vol.yaml > oc_vol.yaml
-		sed -i "s/path: \/mnt\/data\/vol/path: \/mnt\/data\/vol$i/g" oc_vol.yaml
-		oc create -f oc_vol.yaml
-		echo "created volume $i"
-	done
-	rm oc_vol.yaml
-fi
+#		sed "s/name: vol/name: vol$i/g" vol.yaml > oc_vol.yaml
+#		sed -i "s/path: \/mnt\/data\/vol/path: \/mnt\/data\/vol$i/g" oc_vol.yaml
+#		oc create -f oc_vol.yaml
+#		echo "created volume $i"
+#	done
+#	rm oc_vol.yaml
+#fi
 
 echo "******"
 echo "* Your console is https://console.$DOMAIN:$API_PORT"
